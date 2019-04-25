@@ -1,0 +1,21 @@
+choice
+	prompt "Native python version to use"
+	default PYTHON_NATIVE_VERSION_3
+
+config PYTHON_NATIVE_VERSION_2
+	bool "Version 2"
+	help
+		Use python version 2
+
+config PYTHON_NATIVE_VERSION_3
+	bool "Version 3"
+	help
+		Use python version 3
+
+endchoice
+
+config PYTHON_NATIVE_USE_VIRTUAL_ENV
+	prompt "Creates a virtual env inside the staging directory"
+	bool
+	default n
+
