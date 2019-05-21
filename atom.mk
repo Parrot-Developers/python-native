@@ -47,10 +47,10 @@ LOCAL_CONFIG_FILES := Config.in
 $(call load-config)
 
 # Get python native binary
-ifdef CONFIG_PYTHON_NATIVE_VERSION_3
-  PYTHON_NATIVE_BIN := $(shell which python3)
-else
+ifndef CONFIG_PYTHON_NATIVE_VERSION_3
   PYTHON_NATIVE_BIN := $(shell which python2)
+else
+  PYTHON_NATIVE_BIN := $(shell which python3)
 endif
 
 ifneq ("$(PYTHON_NATIVE_BIN)","")
@@ -88,7 +88,8 @@ define LOCAL_CMD_BUILD
 		$(Q) virtualenv -p $(PYTHON_NATIVE_BIN) \
 			$(TARGET_OUT_STAGING)/$(TARGET_ROOT_DESTDIR) \
 			--always-copy \
-			--system-site-packages \
+			--system-site-packages $(endl) \
+		$(Q) ln -sfr $(TARGET_OUT_STAGING)/$(TARGET_ROOT_DESTDIR)/bin/python  $(HOST_OUT_STAGING)/$(HOST_ROOT_DESTDIR)/bin/python \
 		, \
 		$(Q) ln -sf $(PYTHON_NATIVE_BIN) $(HOST_OUT_STAGING)/$(HOST_ROOT_DESTDIR)/bin/python \
 	)
