@@ -80,7 +80,12 @@ PYTHON_CONFIG_DIR := $(shell $(PYTHON_NATIVE_BIN)-config --configdir)
 PYTHON_STATIC_LIB := $(shell readlink -e $(PYTHON_CONFIG_DIR)/lib$(PYTHON_ABI_NAME).a)
 
 LOCAL_EXPORT_C_INCLUDES += $(TARGET_OUT_STAGING)/$(TARGET_ROOT_DESTDIR)/include/$(PYTHON_ABI_NAME)
-LOCAL_EXPORT_LDLIBS := $(shell $(PYTHON_NATIVE_BIN)-config --ldflags)
+ifeq ("$(call check-version,$(PYTHON_NATIVE_VERSION),3.8)","")
+  LOCAL_EXPORT_LDLIBS := $(shell $(PYTHON_NATIVE_BIN)-config --ldflags)
+else
+  # Python >= 3.8 needs the --embed flag
+  LOCAL_EXPORT_LDLIBS := $(shell $(PYTHON_NATIVE_BIN)-config --ldflags --embed)
+endif
 
 #
 # Versionless symbol links to actual python locations, that depends on
