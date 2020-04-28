@@ -70,8 +70,10 @@ endif
 # Python3 adds an 'm' at the end of the version for include directory
 # See also: python3-config --abiflags
 #
+PYTHON_ABI := $(shell $(PYTHON_NATIVE_BIN)-config --abiflags)
+
 ifdef CONFIG_PYTHON_NATIVE_VERSION_3
-  PYTHON_ABI_NAME := python$(PYTHON_NATIVE_VERSION)m
+  PYTHON_ABI_NAME := python$(PYTHON_NATIVE_VERSION)$(PYTHON_ABI)
 else
   PYTHON_ABI_NAME := python$(PYTHON_NATIVE_VERSION)
 endif
