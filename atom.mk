@@ -47,7 +47,7 @@ LOCAL_CONFIG_FILES := Config.in
 $(call load-config)
 
 # Get python native binary
-ifndef CONFIG_PYTHON_NATIVE_VERSION_3
+ifdef CONFIG_PYTHON_NATIVE_VERSION_2
   PYTHON_NATIVE_BIN := $(shell which python2)
 else
   PYTHON_NATIVE_BIN := $(shell which python3)
@@ -83,10 +83,12 @@ PYTHON_STATIC_LIB := $(shell readlink -e $(PYTHON_CONFIG_DIR)/lib$(PYTHON_ABI_NA
 
 LOCAL_EXPORT_C_INCLUDES += $(TARGET_OUT_STAGING)/$(TARGET_ROOT_DESTDIR)/include/$(PYTHON_ABI_NAME)
 ifeq ("$(call check-version,$(PYTHON_NATIVE_VERSION),3.8)","")
-  LOCAL_EXPORT_LDLIBS := $(shell $(PYTHON_NATIVE_BIN)-config --ldflags)
+  LOCAL_EXPORT_LDFLAGS := $(shell $(PYTHON_NATIVE_BIN)-config --ldflags 2>&1|grep -o "\-L[^ ]\+")
+  LOCAL_EXPORT_LDLIBS := $(shell $(PYTHON_NATIVE_BIN)-config --libs)
 else
   # Python >= 3.8 needs the --embed flag
-  LOCAL_EXPORT_LDLIBS := $(shell $(PYTHON_NATIVE_BIN)-config --ldflags --embed)
+  LOCAL_EXPORT_LDFLAGS := $(shell $(PYTHON_NATIVE_BIN)-config --ldflags --embed 2>&1|grep -o "\-L[^ ]\+")
+  LOCAL_EXPORT_LDLIBS := $(shell $(PYTHON_NATIVE_BIN)-config --libs --embed)
 endif
 
 #
@@ -94,9 +96,13 @@ endif
 # build options. Modules that depends on python-native muse use those
 # links.
 #
-PYTHON_TARGET_LIB := $(TARGET_OUT_STAGING)/$(TARGET_ROOT_DESTDIR)/lib/libpython.a
-PYTHON_TARGET_BIN := $(TARGET_OUT_STAGING)/$(TARGET_ROOT_DESTDIR)/lib/python
+PYTHON_TARGET_STATIC_LIB := $(TARGET_OUT_STAGING)/$(TARGET_ROOT_DESTDIR)/lib/libpython.a
+PYTHON_TARGET_SHARED_LIB_DIR := $(TARGET_OUT_STAGING)/$(TARGET_ROOT_DESTDIR)/lib/python
+PYTHON3_TARGET_SHARED_LIB_DIR := $(TARGET_OUT_STAGING)/$(TARGET_ROOT_DESTDIR)/lib/python3
+PYTHON_TARGET_BIN := $(TARGET_OUT_STAGING)/$(TARGET_ROOT_DESTDIR)/bin/python
 
+PYTHON_HOST_STATIC_LIB := $(HOST_OUT_STAGING)/$(HOST_ROOT_DESTDIR)/lib/libpython.a
+PYTHON_HOST_SHARED_LIB_DIR := $(HOST_OUT_STAGING)/$(HOST_ROOT_DESTDIR)/lib/python
 PYTHON_HOST_BIN := $(HOST_OUT_STAGING)/$(HOST_ROOT_DESTDIR)/bin/python
 
 endif
@@ -109,21 +115,48 @@ define LOCAL_CMD_BUILD
 		exit 1; \
 	fi
 	@mkdir -p $(HOST_OUT_STAGING)/$(HOST_ROOT_DESTDIR)/bin
+	@mkdir -p $(HOST_OUT_STAGING)/$(HOST_ROOT_DESTDIR)/lib/python$(PYTHON_NATIVE_VERSION)
+	@mkdir -p $(TARGET_OUT_STAGING)/$(TARGET_ROOT_DESTDIR)/bin
 	@mkdir -p $(TARGET_OUT_STAGING)/$(TARGET_ROOT_DESTDIR)/lib/python$(PYTHON_NATIVE_VERSION)
 	$(if $(CONFIG_PYTHON_NATIVE_USE_VIRTUAL_ENV), \
-		$(Q) virtualenv -p $(PYTHON_NATIVE_BIN) \
+		$(Q) DEB_PYTHON_INSTALL_LAYOUT='deb' \
+			virtualenv -p $(PYTHON_NATIVE_BIN) \
 			$(TARGET_OUT_STAGING)/$(TARGET_ROOT_DESTDIR) \
 			--always-copy \
 			--system-site-packages $(endl) \
 		$(Q) ln -sfr $(TARGET_OUT_STAGING)/$(TARGET_ROOT_DESTDIR)/bin/python $(PYTHON_HOST_BIN) $(endl)\
-	        $(Q) ln -sf $(TARGET_OUT_STAGING)/$(PYTHON_STATIC_LIB) $(PYTHON_TARGET_LIB) \
+		$(Q) ln -sf $(TARGET_OUT_STAGING)/$(PYTHON_STATIC_LIB) $(PYTHON_TARGET_STATIC_LIB) \
 		, \
+		$(Q) ln -sf $(PYTHON_NATIVE_BIN) $(PYTHON_TARGET_BIN) $(endl) \
 		$(Q) ln -sf $(PYTHON_NATIVE_BIN) $(PYTHON_HOST_BIN) $(endl) \
-		$(Q) ln -sf $(PYTHON_STATIC_LIB) $(PYTHON_TARGET_LIB) \
+		$(Q) ln -sf $(PYTHON_STATIC_LIB) $(PYTHON_TARGET_STATIC_LIB) \
 	)
-	$(Q) ln -sf python$(PYTHON_NATIVE_VERSION) $(PYTHON_TARGET_BIN)
 endef
 
 include $(BUILD_CUSTOM)
+
+ifneq ("$(call is-module-in-build-config,python-native)","")
+
+# Rule to create the usr/lib/python symlink early to avoid surprises if a module
+# installs something in usr/lib/python before the link is created.
+# Use -n to avoid dereferencing existing directory symlink
+define python-native-symlink-create
+	@if [[ -e $1 && ! -L $1 ]]; then \
+		echo "$1 is not a symlink, you need to clean the output directory"; \
+		exit 1; \
+	fi
+	$(Q) mkdir -p $(dir $1)/python$(PYTHON_NATIVE_VERSION)
+	$(Q) ln -sfn python$(PYTHON_NATIVE_VERSION) $1
+endef
+
+.PHONY: python-native-symlink
+python-native-symlink:
+	$(call python-native-symlink-create,$(PYTHON_TARGET_SHARED_LIB_DIR))
+	$(call python-native-symlink-create,$(PYTHON3_TARGET_SHARED_LIB_DIR))
+	$(call python-native-symlink-create,$(PYTHON_HOST_SHARED_LIB_DIR))
+
+TARGET_GLOBAL_PREREQUISITES += python-native-symlink
+
+endif
 
 endif
